@@ -1,0 +1,175 @@
+{
+	"info": {
+		"_postman_id": "86ca69b9-1f0a-438a-a0f7-a2a291fcb129",
+		"name": "GON Test Health Check App",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "3257783",
+		"_collection_link": "https://vidsigneritequia.postman.co/workspace/GON-Mule~3af5d665-c687-4d45-85e6-35c2c50ef956/collection/3257783-86ca69b9-1f0a-438a-a0f7-a2a291fcb129?action=share&source=collection_link&creator=3257783"
+	},
+	"item": [
+		{
+			"name": "System API Readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://{{test-health-check-api}}/system/ready",
+					"protocol": "http",
+					"host": [
+						"{{test-health-check-api}}"
+					],
+					"path": [
+						"system",
+						"ready"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "System API Liveness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://{{test-health-check-api}}/system/alive",
+					"protocol": "http",
+					"host": [
+						"{{test-health-check-api}}"
+					],
+					"path": [
+						"system",
+						"alive"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Process API Liveness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://{{test-health-check-api}}/process/alive",
+					"protocol": "http",
+					"host": [
+						"{{test-health-check-api}}"
+					],
+					"path": [
+						"process",
+						"alive"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Process API Readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://{{test-health-check-api}}/process/ready",
+					"protocol": "http",
+					"host": [
+						"{{test-health-check-api}}"
+					],
+					"path": [
+						"process",
+						"ready"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Salesforce SAPI Readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://salesforce-system-api-17ekvx.a671fi.gbr-e1.cloudhub.io/ready",
+					"protocol": "https",
+					"host": [
+						"salesforce-system-api-17ekvx",
+						"a671fi",
+						"gbr-e1",
+						"cloudhub",
+						"io"
+					],
+					"path": [
+						"ready"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Inventory SAPI Readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://mule-app-inventory-system-api-prod-17ekvx.a671fi.gbr-e1.cloudhub.io/ready",
+					"protocol": "https",
+					"host": [
+						"mule-app-inventory-system-api-prod-17ekvx",
+						"a671fi",
+						"gbr-e1",
+						"cloudhub",
+						"io"
+					],
+					"path": [
+						"ready"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "SAP SAPI Readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://sap-system-api-prod-17ekvx.a671fi.gbr-e1.cloudhub.io/ready",
+					"protocol": "https",
+					"host": [
+						"sap-system-api-prod-17ekvx",
+						"a671fi",
+						"gbr-e1",
+						"cloudhub",
+						"io"
+					],
+					"path": [
+						"ready"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Products SAPI Readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://products-system-api-prod-17ekvx.a671fi.gbr-e1.cloudhub.io/ready",
+					"protocol": "https",
+					"host": [
+						"products-system-api-prod-17ekvx",
+						"a671fi",
+						"gbr-e1",
+						"cloudhub",
+						"io"
+					],
+					"path": [
+						"ready"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
