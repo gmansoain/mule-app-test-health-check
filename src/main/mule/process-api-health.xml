@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	
+	<http:request-config name="HTTP_Request_ServiceNow_config" doc:name="HTTP Request configuration" doc:id="6378a993-f5a1-4318-9a53-d1cadd12d54b" >
+		<http:request-connection protocol="HTTPS" host="dev25750.service-now.com" />
+	</http:request-config>
+	<http:listener-config name="HTTP_Listener_Health_Check_API" doc:name="HTTP Listener config" doc:id="5f1b241c-2917-4b65-97a2-ede9802bb1cd" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="7113c38a-6e7d-4ec1-a6c0-ffc5ef4bfcd0" file="properties/properties-dev.yaml" key="paris2024">
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<flow name="livenessCheck" doc:id="b89cc477-d687-413a-8f10-bac6f43b8b7f" >
+			<http:listener doc:name="Listener" doc:id="4a473f85-552f-4c7f-9fec-a9d60bee77ae" config-ref="HTTP_Listener_Health_Check_API" path="/process/alive">
+				<http:response statusCode="200" />
+				<http:error-response statusCode="500" >
+					<http:body ><![CDATA[#[DOWN]]]></http:body>
+				</http:error-response>
+			</http:listener>
+			<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    "status": "OK",&#10;    "apiName": p("api.name") default "",&#10;	"apiVersion": p("api.version") default "",&#10;	"runtime": p("api.runtime") default "",&#10;	"timeStamp": now()&#10;}]' doc:name="Set Payload" doc:id="984bd72f-ab1e-46b2-bc48-3c8a24924f6d" />
+		</flow>
+		<flow name="readinessCheck">
+			<http:listener config-ref="HTTP_Listener_Health_Check_API" path="/process/ready">
+			<http:response statusCode="200" />
+			<http:error-response statusCode="500">
+			<http:body><![CDATA[DOWN]]></http:body>
+			</http:error-response>
+			</http:listener>
+			<flow-ref name="check-dependencies" doc:id="09602727-2c55-4c81-b8f1-09a874731c1d" doc:name="check-dependencies"/>
+		<ee:transform doc:name="Map Response" doc:id="1754a2e5-9a95-4440-a448-1ccf07aa9e2d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+fun getDependencyStatus(dependencyResponse) = if(sizeOf(dependencyResponse.status find "UP") == sizeOf(dependencyResponse))
+    "OK"
+else if (sizeOf(dependencyResponse.status find "DOWN") == sizeOf(dependencyResponse))
+    "OFFLINE"
+else
+    "DEGRADED"
+
+output application/json
+---
+{
+    "status": getDependencyStatus(vars.dependencyList),
+    "apiName": p("api.name") default "",
+	"apiVersion": p("api.version") default "",
+	"runtime": p("api.runtime") default "",
+	"timeStamp": now(),
+    "dependencies": vars.dependencyList map (
+        {
+            "name": $.name,
+            "status": $.status
+        }
+    )
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="200" doc:name="Set httpStatus to 200" doc:id="1d2ec206-7674-4d76-a8d2-166d861505f9" variableName="httpStatus"/>
+		</flow>
+		<sub-flow name="check-dependencies" doc:id="e88760dd-87da-402b-a238-aee6532f85d9" >
+		<scatter-gather doc:name="Scatter-Gather" doc:id="ad1309fa-afb9-46a3-a625-5b07909676fe" >
+			<route >
+				<flow-ref doc:name="check dependency Salesforce sAPI" doc:id="433a4ce6-9a1e-4687-9988-47fc42a346a8" name="check-dependency-Salesforce-sAPI" />
+			</route>
+			<route >
+				<flow-ref doc:name="check dependency SAP sAPI" doc:id="6c446112-4b5b-4637-a21f-62c1d2e996fe" name="check-dependency-SAP-sAPI" />
+			</route>
+			<route >
+				<flow-ref doc:name="check dependency Products sapi" doc:id="7bac290e-7b28-44d4-a97f-8c0fcef58343" name="check-dependency-Products-sAPI"/>
+			</route>
+			<route >
+				<flow-ref doc:name="check dependency Inventory sAPI" doc:id="07dba3ff-5229-4306-b40c-e5e64657bc8e" name="check-dependency-Inventory-sAPI"/>
+			</route>
+		</scatter-gather>
+		<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;[&#10;	vars.dependency_salesforce_sapi,&#10;	vars.dependency_sap_sapi,&#10;	vars.dependency_products_sapi,&#10;	vars.dependency_inventory_sapi&#10;]]" doc:name="dependencyList" doc:id="0052d9ec-98ce-4c6b-8ee3-52e4a71a1fb0" variableName="dependencyList"/>
+	</sub-flow>
+	<sub-flow name="check-dependency-Salesforce-sAPI" doc:id="85cfb221-79ed-432d-8a36-f650dd2c1c35" >
+		<try doc:name="Try" doc:id="1eaf7053-4830-4b56-9f31-59fdd633ffd9" >
+			<http:request method="GET" doc:name="Request" doc:id="63692327-815d-4d8e-8361-a073702c35fe" config-ref="HTTP_Request_Salesforce_sAPI" path="/ready" />
+			<logger level="INFO" doc:name="Logger" doc:id="7c8a55b6-0b89-4ac8-90dd-8288c811c15c" message="#[payload]"/>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="1fba7100-b3f4-46c6-98a9-11486032a087" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Salesforce System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_salesforce_sapi to DOWN" doc:id="82a5232a-78f7-4c3a-9393-bb70ddad2a97" variableName="dependency_salesforce_sapi"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<choice doc:name="Choice" doc:id="38bd11af-a3da-4703-81f2-e97a8ae7035f" >
+			<when expression='#[payload.status == "OK"]'>
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Salesforce System API",&#10;	status: "UP"&#10;}]' doc:name="Set dependency_salesforce_sapi to UP" doc:id="c647b087-1db6-4257-9e18-61ba7f2e557a" variableName="dependency_salesforce_sapi" />
+			</when>
+			<otherwise >
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Salesforce System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_salesforce_sapi to DOWN" doc:id="89628d44-3adf-4215-8e06-b7f1603f87e9" variableName="dependency_salesforce_sapi"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="check-dependency-Products-sAPI" doc:id="4f458b05-ff92-42b0-8982-fe7194f723ae" >
+		<try doc:name="Try" doc:id="76111540-c675-4cb3-8a24-6175c53122e5" >
+			<http:request method="GET" doc:name="Request" doc:id="61b45427-3b29-4551-8051-b0a6f1494221" config-ref="HTTP_Request_Products_sAPI" path="/ready" />
+			<logger level="INFO" doc:name="Logger" doc:id="e5aaeb90-04a9-4a24-8e02-00f189248e30" message="#[payload]"/>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="e89bf68d-5d7c-4d6d-8855-9aab18876043" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Products System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_products_sapi to DOWN" doc:id="b7cd8d67-e716-4966-8c34-aec8ef63f08d" variableName="dependency_products_sapi"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<choice doc:name="Choice" doc:id="a802015c-7efa-441c-878f-b358641c921a" >
+			<when expression='#[payload.status == "OK"]'>
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Products System API",&#10;	status: "UP"&#10;}]' doc:name="Set dependency_products_sapi to UP" doc:id="00800029-f78d-4345-940c-16ec36d60e46" variableName="dependency_products_sapi" />
+			</when>
+			<otherwise >
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Products System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_products_sapi to DOWN" doc:id="2d04244f-8edb-4c7f-a047-d4cfd26cfd9a" variableName="dependency_products_sapi"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="check-dependency-SAP-sAPI" doc:id="b9cc077e-0469-4b86-b6c0-eb0b2e4439fa" >
+		<try doc:name="Try" doc:id="4313ae6c-e5b4-41ee-8483-cc68970833fd" >
+			<http:request method="GET" doc:name="Request" doc:id="14ffed9d-c851-4417-82b4-ae819fd0d7c6" config-ref="HTTP_Request_SAP_sAPI" path="/ready" />
+			<logger level="INFO" doc:name="Logger" doc:id="425342c0-f000-4bb4-848f-caa44b193eb1" message="#[payload]"/>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="4379c8d4-0f29-4876-96c6-af8c48c0e665" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "SAP System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_sap_sapi to DOWN" doc:id="87310a2f-9400-425f-a392-78a98e4cc1eb" variableName="dependency_sap_sapi"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<choice doc:name="Choice" doc:id="b019c52b-4e45-4d92-aea6-92c0f9ea2717" >
+			<when expression='#[payload.status == "OK"]'>
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "SAP System API",&#10;	status: "UP"&#10;}]' doc:name="Set dependency_sap_sapi to UP" doc:id="e1358b40-b80c-4b7a-96ff-3b2e94e1029f" variableName="dependency_sap_sapi" />
+			</when>
+			<otherwise >
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "SAP System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_sap_sapi to DOWN" doc:id="f2133c87-5f8c-4be4-ad49-ef16a26bb0dd" variableName="dependency_sap_sapi"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="check-dependency-Inventory-sAPI" doc:id="69d9a336-117a-425f-a4e5-8f9a4bc96dc3" >
+		<try doc:name="Try" doc:id="b2b0c695-2288-48bf-98f8-d219bf99de99" >
+			<http:request method="GET" doc:name="Request" doc:id="605330bb-6130-4ff9-9298-be5302ffe6a0" config-ref="HTTP_Request_Inventory_API" path="/ready" />
+			<logger level="INFO" doc:name="Logger" doc:id="f5a8ee27-5a4a-4d8e-b36f-7413cc3bab92" message="#[payload]"/>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="950e2947-ad74-4659-9825-372b144e0e17" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Inventory System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_inventory_sapi to DOWN" doc:id="ae422ae7-a94d-4e47-9749-1bf6d31e0092" variableName="dependency_inventory_sapi"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<choice doc:name="Choice" doc:id="091f7c36-3336-4624-b666-b67038aea9c0" >
+			<when expression='#[payload.status == "OK"]'>
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Inventory System API",&#10;	status: "UP"&#10;}]' doc:name="Set dependency_inventory_sapi to UP" doc:id="0bb760bb-e60a-448b-9c29-f3a92de275f9" variableName="dependency_inventory_sapi" />
+			</when>
+			<otherwise >
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Inventory System API",&#10;	status: "DOWN"&#10;}]' doc:name="Set dependency_inventory_sapi to DOWN" doc:id="7ba8c6f9-8930-4e31-a8a1-22b64b9ab136" variableName="dependency_inventory_sapi"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+
+
+	<http:request-config name="HTTP_Request_Salesforce_sAPI" doc:name="HTTP Request configuration" doc:id="b346dd85-0d20-4175-a51a-bd7e2a394e25">
+		<http:request-connection protocol="HTTPS" host="salesforce-system-api-17ekvx.a671fi.gbr-e1.cloudhub.io" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_Products_sAPI" doc:name="HTTP Request configuration" doc:id="839f8d37-9fca-4bc6-9d7e-651d76ac6db3">
+		<http:request-connection protocol="HTTPS" host="products-system-api-prod-17ekvx.a671fi.gbr-e1.cloudhub.io" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_SAP_sAPI" doc:name="HTTP Request configuration" doc:id="9c67575a-59ea-451c-aa9d-6fc9d93026a1">
+		<http:request-connection protocol="HTTPS" host="sap-system-api-prod-17ekvx.a671fi.gbr-e1.cloudhub.io" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_Inventory_API" doc:name="HTTP Request configuration" doc:id="6771a0fd-88a7-44b3-9974-1222c5f33da7">
+		<http:request-connection protocol="HTTPS" host="mule-app-inventory-system-api-prod-17ekvx.a671fi.gbr-e1.cloudhub.io"/>
+	</http:request-config>
+
+</mule>

@@ -1,0 +1,7 @@
+%dw 2.0
+
+type auto_4f458b05_ff92_42b0_8982_fe7194f723ae_Output_Variables_dependency_products_sapi = {|
+  name: String, 
+  status: String
+|}
+

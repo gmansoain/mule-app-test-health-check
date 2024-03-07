@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_bfd23cd3_76aa_4d92_bc95_f4c337b91cca_Output_Variables_dependencyList = Array<{|  name: String,   status: String|}>
+

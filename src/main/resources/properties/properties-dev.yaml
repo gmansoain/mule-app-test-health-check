@@ -1,0 +1,20 @@
+# API specification
+api:
+  name: "${project.artifactId}"
+  version: "${project.version}"
+  runtime: "4.4.0"
+
+db:
+  host: "cloud-services.demos.mulesoft.com" #to be modified at runtime
+  port: "30398"
+  username: "![7Do3dlE8U+M=]"
+  password: "![AAMx2TWR/meqy3YPdqHrD1ICrZCbQ0Yw]"
+  database: "![dBhKz8uk45/u7CR93pfwXg==]"
+  
+salesforce:
+  username: "![g6MVUSNZAZ08EQkO1ktwpihevjWRf8bB]"
+  password: "![VeMNR+eCG1mwFvzMw94zBQ==]"
+  token: "EWRpy94JS4QGXnIiVLhQmjTR"
+  
+serviceNow:
+  host: "![2uv1EKnZ7RTV7Woq1tNgDu3QyKfCysnQlDaBUjeAhGI=]"

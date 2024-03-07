@@ -1,0 +1,7 @@
+%dw 2.0
+
+type auto_69d9a336_117a_425f_a4e5_8f9a4bc96dc3_Output_Variables_dependency_salesforce_sapi = {|
+  name: String, 
+  status: String
+|}
+

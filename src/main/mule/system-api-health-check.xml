@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	
+	<http:request-config name="HTTP_Request_Backend_ServiceNow" doc:name="HTTP Request configuration" doc:id="6b8f997d-b728-4cf4-beee-fd722c1e9b94" >
+		<http:request-connection protocol="HTTPS" host="${secure::serviceNow.host}" />
+	</http:request-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="f41948fb-a20f-4945-8ad8-ba68bbc26c00" >
+		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${secure::db.username}" password="${secure::db.password}" database="${secure::db.database}"/>
+	</db:config>
+	<salesforce:sfdc-config name="Salesforce_Backend_Config" doc:name="Salesforce Config" doc:id="d611dc3d-02f0-40ab-ac29-c54f5b3dc7dc" >
+		<salesforce:basic-connection username="${secure::salesforce.username}" password="${secure::salesforce.password}" securityToken="${salesforce.token}"/>
+	</salesforce:sfdc-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="e457b8de-b5db-42d7-a047-f0e45e5dc324" file="properties/properties-dev.yaml" />
+	<flow name="livenessCheckSystemAPI" doc:id="a1898151-e4d8-45ce-b93c-65f28cfac660" >
+			<http:listener doc:name="Listener" doc:id="d5a5b0b6-8ed9-419b-abc7-17106d8982ef" config-ref="HTTP_Listener_Health_Check_API" path="/system/alive">
+				<http:response statusCode="200" />
+				<http:error-response statusCode="500" >
+					<http:body ><![CDATA[#[DOWN]]]></http:body>
+				</http:error-response>
+			</http:listener>
+			<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    "status": "OK",&#10;    "apiName": p("api.name") default "",&#10;	"apiVersion": p("api.version") default "",&#10;	"runtime": p("api.runtime") default "",&#10;	"timeStamp": now()&#10;}]' doc:name="Set Payload" doc:id="3f4de552-f5ba-41cf-9122-03bb1949f41d" />
+		</flow>
+		<flow name="readinessCheckSystemAPI">
+			<http:listener path="/system/ready" config-ref="HTTP_Listener_Health_Check_API">
+			<http:response statusCode="200" />
+			<http:error-response statusCode="500">
+			<http:body><![CDATA[DOWN]]></http:body>
+			</http:error-response>
+			</http:listener>
+			<flow-ref name="check-dependencies-backend" doc:id="43d02422-279d-4829-9ccb-cffdbafbe630" doc:name="check-dependencies"/>
+		<ee:transform doc:name="Map Response" doc:id="41d8778e-5994-4095-9621-c9e6264993f2" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+fun getDependencyStatus(dependencyResponse) = if(sizeOf(dependencyResponse.status find "UP") == sizeOf(dependencyResponse))
+    "OK"
+else if (sizeOf(dependencyResponse.status find "DOWN") == sizeOf(dependencyResponse))
+    "OFFLINE"
+else
+    "DEGRADED"
+
+output application/json
+---
+{
+    "status": getDependencyStatus(vars.dependencyList),
+    "apiName": p("api.name") default "",
+	"apiVersion": p("api.version") default "",
+	"runtime": p("api.runtime") default "",
+	"timeStamp": now(),
+    "dependencies": vars.dependencyList map (
+        {
+            "name": $.name,
+            "status": $.status
+        }
+    )
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="200" doc:name="Set httpStatus to 200" doc:id="061f00cd-b416-4954-bd99-31900bd7b820" variableName="httpStatus"/>
+		</flow>
+		<sub-flow name="check-dependencies-backend" doc:id="64e883a6-d131-4248-b376-ef2935904149" >
+		<scatter-gather doc:name="Scatter-Gather" doc:id="105f52e9-856f-40d7-a3fe-68b11d18c612" >
+			<route >
+				<flow-ref doc:name="check dependency serviceNow" doc:id="8f293fa9-0c99-4062-874a-488f7dc36fdd" name="check-dependency-backend-serviceNow" />
+			</route>
+			<route >
+				<flow-ref doc:name="check dependency Salesforce" doc:id="4ad6fdf5-26a8-4501-aa6e-352724881886" name="check-dependency-backend-salesforce" />
+			</route>
+			<route >
+				<flow-ref doc:name="check dependency DB" doc:id="fb96ba52-61b1-40c2-acb0-fe038caa9220" name="check-dependency-backend-db"/>
+			</route>
+		</scatter-gather>
+		<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;[&#10;	vars.dependencyServiceNow,&#10;	vars.dependencySalesforce,&#10;	vars.dependencyDB&#10;]]" doc:name="dependencyList" doc:id="8815074c-4247-4d2b-aa5f-fcb561dc919a" variableName="dependencyList"/>
+	</sub-flow>
+		<sub-flow name="check-dependency-backend-serviceNow" doc:id="76c4089e-a8a9-4477-a58c-a9edba43a484" >
+		<try doc:name="Try" doc:id="15962c16-15d5-48c8-95c5-8adeb77e7ff7" >
+			<http:request method="GET" doc:name="Request" doc:id="61b33618-33c1-4319-91da-e1a793d6d3f7" config-ref="HTTP_Request_Backend_ServiceNow" path="/xmlstats.do" />
+			<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "ServiceNow",&#10;	status: "UP"&#10;}]' doc:name="dependencyServiceNow" doc:id="a408fcc4-98dc-48b1-88e2-390f85669c8c" variableName="dependencyServiceNow" />
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="086eb04c-0376-4942-beea-3bf879dcb4be" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "ServiceNow",&#10;	status: "DOWN"&#10;}]' doc:name="dependencyServiceNow" doc:id="a7a695a8-8054-48a3-a298-0fd486a5a7bc" variableName="dependencyServiceNow"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</sub-flow>
+		<sub-flow name="check-dependency-backend-salesforce" doc:id="dbc12038-9113-446c-8bae-eba1f36f99d8" >
+		<try doc:name="Try" doc:id="3be8c9e2-7c40-4664-a5c5-5617b789ba76" >
+			<salesforce:query doc:name="Query" doc:id="14379175-c35b-44b8-b240-c69beec7d544" config-ref="Salesforce_Backend_Config">
+			<salesforce:salesforce-query><![CDATA[SELECT Id, Name, BillingAddress, Industry, Phone, Website, NumberOfEmployees, AnnualRevenue
+FROM Account]]></salesforce:salesforce-query>
+		</salesforce:query>
+			<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Salesforce",&#10;	status: "UP"&#10;}]' doc:name="dependencySalesforce" doc:id="b20e5dfe-f003-4d1b-b9e8-7201d6480190" variableName="dependencySalesforce" />
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="54521415-41e1-4135-80ac-fd53d7f470d0" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Salesforce",&#10;	status: "DOWN"&#10;}]' doc:name="dependencySalesforce" doc:id="b8c13f5e-5f1a-4ed6-8c20-48d5b62d1b04" variableName="dependencySalesforce"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</sub-flow>
+		
+		<sub-flow name="check-dependency-backend-db" doc:id="d39d7daa-87c2-4d9d-b66e-2d8dcc043b50">
+		<try doc:name="Try" doc:id="51456fd7-8a06-419d-bafe-cba33ab91019" >
+			<db:select doc:name="Select" doc:id="99c7301a-425a-4ff0-afc2-c4e810f58d05" config-ref="Database_Config">
+			<db:sql><![CDATA[SELECT * FROM inventory WHERE inventory_id = 1]]></db:sql>
+		</db:select>
+			<choice doc:name="Check Select query returns data" doc:id="dbc030c2-9e69-4236-9109-2228a0151d93">
+			<when expression="#[sizeOf(payload) == 0]">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Database",&#10;	status: "DOWN"&#10;}]' doc:name="dependencyDB" doc:id="a884a2d0-71c8-42eb-b44e-981cf8f06f8e" variableName="dependencyDB"/>
+			</when>
+				<otherwise>
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Database",&#10;	status: "UP"&#10;}]' doc:name="dependencyDB" doc:id="f5ab499f-fb32-4c67-8268-d41dd10c6310" variableName="dependencyDB" />
+			</otherwise>
+		</choice>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="66d841f2-6566-470e-91d3-a8552c3b7206" type="ANY">
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	name: "Database",&#10;	status: "DOWN"&#10;}]' doc:name="dependencyDB" doc:id="cdfde5e2-2776-4e02-8e33-c2b899644713" variableName="dependencyDB"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		</sub-flow>
+
+
+</mule>
